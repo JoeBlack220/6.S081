@@ -655,3 +655,19 @@ procdump(void)
     printf("\n");
   }
 }
+
+uint64
+freeprocs(void)
+{
+	struct proc *p;
+	uint64 res = 0;
+	acquire(&pid_lock);
+	for(int i = 0; i < NPROC; ++i) {
+		p = &proc[i];
+		if(p->state != UNUSED) {
+			res++;
+		}
+	}
+	release(&pid_lock);
+	return res;
+}
