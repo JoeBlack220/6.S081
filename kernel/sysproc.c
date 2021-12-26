@@ -97,7 +97,11 @@ sys_uptime(void)
 }
 
 uint64
-sys_trace(int bitmask) {
-	myproc()->trace_bitmask = bitmask;
+sys_trace(void) {
+	int trace_bitmask;
+	if(argint(0, &trace_bitmask) < 0) {
+		return -1;
+	}
+	myproc()->trace_bitmask = trace_bitmask;
 	return 0;
 }
