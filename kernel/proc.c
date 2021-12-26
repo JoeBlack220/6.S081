@@ -300,7 +300,8 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
-
+	// copy the bitmask for tracing
+	np->trace_bitmask = p->trace_bitmask;
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
