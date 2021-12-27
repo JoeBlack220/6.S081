@@ -24,6 +24,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int pageaccess(uint64 fpa, int pnum, uint64 buf);
+
 #ifdef LAB_NET
 int connect(uint32, uint16, uint16);
 #endif
