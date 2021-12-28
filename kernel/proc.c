@@ -127,6 +127,15 @@ found:
     return 0;
   }
 
+	// Allocate a alarmframe page
+	// Don't need to add it into process page table 
+	// since it won't be accessed in user space
+	if((p->alarmframe = (struct trapframe *)kalloc()) == 0){
+		freeproc(p);
+		release(&p->lock);
+		return 0;
+	}
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -164,6 +173,15 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+	
+	// free fields for alarm lab
+	p->handler = 0;
+	p->curticks = 0;
+	p->alarmticks = 0;
+	p->ishandling = 0;
+	if(p->alarmframe) {
+		kfree((void*)p->alarmframe);
+	}
 }
 
 // Create a user page table for a given process,
