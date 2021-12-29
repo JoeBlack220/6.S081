@@ -29,6 +29,45 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+int
+cow_handler(pagetable_t pagetable, uint64 va)
+{
+	if(pagetable == 0) {
+		panic("page table is null\n");
+	}
+
+	if(myproc()->sz <= va) {
+		printf("cow_handler receives a out of range address\n");
+		myproc()->killed = 1;
+		return -1;
+	}
+
+	uint64 vabase = PGROUNDDOWN(va);
+	pte_t *pte;
+	if((pte = walk(pagetable, vabase, 0)) == 0) {
+		return -1;
+	}
+		
+	uint flags = PTE_FLAGS(*pte);
+	if(!((*pte & PTE_L) && !(*pte & PTE_W))) {
+		return -1;
+	}
+
+	void* mem = kalloc();
+	if(mem == 0) {
+		return -1;
+	}
+
+	memmove(mem, (void*)PTE2PA(*pte), PGSIZE);
+	uvmunmap(pagetable, vabase, 1, 1);
+	flags = (flags & (~PTE_L)) | PTE_W; 
+	if(mappages(pagetable, vabase, PGSIZE, (uint64)mem, flags)) {
+    return -1;
+	}
+
+  return 0;
+}
+
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -67,7 +106,11 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } else if (r_scause() == 15) {
+		if(cow_handler(myproc()->pagetable, r_stval()) != 0) {
+			p->killed = 1;
+		}
+	} else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
