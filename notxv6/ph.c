@@ -16,7 +16,8 @@ struct entry {
 struct entry *table[NBUCKET];
 int keys[NKEYS];
 int nthread = 1;
-
+pthread_mutex_t mp = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutexattr_t mattr;
 
 double
 now()
@@ -47,6 +48,7 @@ void put(int key, int value)
     if (e->key == key)
       break;
   }
+	pthread_mutex_lock(&mp);
   if(e){
     // update the existing key.
     e->value = value;
@@ -54,6 +56,7 @@ void put(int key, int value)
     // the new is new.
     insert(key, value, &table[i], table[i]);
   }
+	pthread_mutex_unlock(&mp);
 
 }
 
@@ -105,7 +108,7 @@ main(int argc, char *argv[])
   void *value;
   double t1, t0;
 
-
+	pthread_mutex_init(&mp, &mattr);
   if (argc < 2) {
     fprintf(stderr, "Usage: %s nthreads\n", argv[0]);
     exit(-1);
