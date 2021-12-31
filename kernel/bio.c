@@ -84,7 +84,20 @@ bget(uint dev, uint blockno)
   }
 	// not releasing the current block in case other process found a mapping for the same sector
 	// acquire the global lock since we need to iterate the whole table
+	release(&bcache.headslock[key]);
   acquire(&bcache.lock);
+	acquire(&bcache.headslock[key]);
+	//check again
+	for(b = bcache.heads[key].next; b != &bcache.heads[key]; b = b->next){
+      if(b->dev == dev && b->blockno == blockno){
+        b->refcnt++;
+        b->timestamp = ticks;
+        release(&bcache.headslock[key]);
+				release(&bcache.lock);
+        acquiresleep(&b->lock);
+        return b;
+      }
+   }
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
 	int evictbckt = -1;
