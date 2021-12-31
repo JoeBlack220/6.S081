@@ -98,6 +98,7 @@ bget(uint dev, uint blockno)
         return b;
       }
    }
+	release(&bcache.headslock[key]);
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
 	int evictbckt = -1;
@@ -105,20 +106,19 @@ bget(uint dev, uint blockno)
 	struct buf* minb = 0;
 
 	for(int i = 0; i < BCKTNUM; ++i) {
-		if(i != key) {
-			acquire(&bcache.headslock[i]);
-		}
+		acquire(&bcache.headslock[i]);
 		for(b = bcache.heads[i].prev; b != &bcache.heads[i]; b = b->prev) {
 			if(b->timestamp < mintimestamp && b->refcnt == 0) {
-				if(evictbckt != -1 && evictbckt != key) {
+				if(evictbckt != -1) {
 					release(&bcache.headslock[evictbckt]);
 				}
 				evictbckt = i;
 				mintimestamp = b->timestamp;
 				minb = b;
+				break;
 			}
 		}
-		if(evictbckt != i && i != key) {
+		if(evictbckt != i) {
 			release(&bcache.headslock[i]);
 		}
 	}
@@ -130,10 +130,8 @@ bget(uint dev, uint blockno)
 	// Evict minb from the previous bucket
 	minb->prev->next = minb->next;
 	minb->next->prev = minb->prev;
-	if(evictbckt != key) {
-		release(&bcache.headslock[evictbckt]);
-	}
-
+	release(&bcache.headslock[evictbckt]);
+	acquire(&bcache.headslock[key]);
 	// Add minb to the new bucket
 	minb->next = bcache.heads[key].next;
 	minb->prev = &bcache.heads[key];
