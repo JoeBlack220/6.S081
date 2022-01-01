@@ -1,4 +1,4 @@
-//
+
 // File-system system calls.
 // Mostly argument checking, since we don't trust
 // user code, and calls into file.c and fs.c.
@@ -286,10 +286,10 @@ create(char *path, short type, short major, short minor)
 uint64
 sys_open(void)
 {
-  char path[MAXPATH];
+  char path[MAXPATH], sympath[MAXPATH];
   int fd, omode;
   struct file *f;
-  struct inode *ip;
+  struct inode *ip, *sym;
   int n;
 
   if((n = argstr(0, path, MAXPATH)) < 0 || argint(1, &omode) < 0)
@@ -315,6 +315,35 @@ sys_open(void)
       return -1;
     }
   }
+
+	if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
+		int count = 0;
+		while(1) {
+			if(readi(ip, 0, (uint64)&sympath, 0, MAXPATH) == -1) {
+				printf("sys_open: readi failed\n");
+				iunlockput(ip);
+				end_op();
+				return -1;
+			}
+			iunlockput(ip);
+			if((sym = namei(sympath)) == 0) {
+				end_op();
+				return -1;
+			}
+			count++;
+			if(count >= 10) {
+				end_op();
+				return -1;
+			}
+			ip=sym;
+			if(ip->type != T_SYMLINK) {
+				ilock(ip);
+				break;
+			}
+			ilock(ip);
+		}
+	
+	}
 
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
@@ -483,4 +512,68 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+uint
+sys_symlink(void) {
+	char target[MAXPATH], path[MAXARG], parent[DIRSIZ];
+	struct inode *ip, *sym;
+
+	if(argstr(0, target, MAXPATH) < 0) {
+		return -1;
+	}
+
+	if(argstr(1, path, MAXPATH) < 0) {
+		return -1;
+	}
+
+	begin_op();
+	if((ip = namei(target)) != 0) {
+		ilock(ip);
+
+		if(ip->type == T_DIR) {
+			printf("sys_symlink: can't create symlink for dir\n");
+			iunlockput(ip);
+			end_op();
+			return -1;
+		}
+		iunlockput(ip);
+	}
+
+	if((ip = nameiparent(path, parent)) == 0) {
+		printf("sys_symlink: parent not exist\n");
+		end_op();
+		return -1;
+	}
+
+	ilock(ip);
+	if((sym = dirlookup(ip, parent, 0)) != 0) {
+		printf("sys_symlink: same name already exist\n");
+		goto bad;
+	}
+
+	if((sym = ialloc(ip->dev, T_SYMLINK)) == 0) {
+		panic("sys_symlink: ialloc");
+	}
+	
+	ilock(sym);
+	sym->nlink = 1;
+	iupdate(sym);
+	if(dirlink(ip, parent, sym->inum) < 0 ) {
+		panic("sys_symlink: dirlink");
+	}
+
+	iupdate(ip);
+	if(writei(sym, 0, (uint64)&target, 0, strlen(target)) != strlen(target)) {
+		panic("sys_symlink: writei");
+	}
+	iupdate(sym);
+	iunlockput(ip);
+	iunlockput(sym);
+	end_op();
+	return 0;
+bad:
+	iunlockput(ip);
+	end_op();
+	return -1;
 }
